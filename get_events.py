@@ -31,6 +31,86 @@ logger = logging.getLogger('websockets')
 logger.setLevel(logging.ERROR)
 logger.addHandler(logging.StreamHandler())
 
+#-------------------------------------------------------------------------------
+#
+#  Metadata parsers                                                         {{{1
+#
+#-------------------------------------------------------------------------------
+
+class NotificationHandler:
+   """
+   Baseclass to offer a bit of structure in handling the various event
+   responses from the device 
+
+   This is not complete at all
+   """
+   def __init__(self):
+      pass
+
+   def _parse_ts(self, ts: int) -> str:
+      """
+      Create string representation of timestamp
+      """
+      return datetime.fromtimestamp(ts / 1000).strftime('%Y-%m-%d %H:%M:%S')
+
+   def dump(self, device, notification):
+      """
+      Basic default notification parameter dump
+      """
+      ts = self._parse_ts(notification['timestamp'])
+      source = ' '.join([f'{a}={b}' for a,b in notification['message']['source'].items()])
+      data = ' '.join([f'{a}={b}' for a,b in notification['message']['data'].items()])
+      print(f'{ts} {device}: {notification["topic"]} {source} {data}')
+
+
+class TrackEndedHandler(NotificationHandler):
+   """
+   Handles a track. To get these events you need to apply some configuration first:
+
+   - Set feature flag selected_metadata_events 
+     https://www.axis.com/vapix-library/subjects/t10175981/section/t10177668/display
+
+   - Enable analyics metadata producer
+     https://www.axis.com/vapix-library/subjects/t10175981/section/t10178746/display
+   """
+   def dump(self, device, notification):
+      ts = self._parse_ts(notification['timestamp'])
+      print('Track:   bottom left   right  top    timestamp')  
+      print('         ------ ------ ------ ------ ---------------------------')  
+      data = notification['message']['data']
+      for obs in json.loads(data['observations']):
+         print('         {:>6} {:>6} {:>6} {:>6} {}'.format(
+             obs['bounding_box']['bottom'],
+             obs['bounding_box']['left'],
+             obs['bounding_box']['right'],
+             obs['bounding_box']['top'],
+             obs['timestamp']
+         ))
+      if len(data['classes']):
+         classes = json.loads(data['classes'])
+         for _cls in classes:
+            print(f'Class: {_cls["type"]} Score: {_cls["score"]}')
+         # Todo: add the other parts like upper_clothing_colors
+      print('')
+
+handler_db = {
+   'tns1:VideoAnalytics/tnsaxis:TrackEnded': TrackEndedHandler(),
+   '*': NotificationHandler()
+}
+
+def handle_notification(device, notification):
+   """
+   Find correct handler or pass to the generic one
+   """
+   t = notification['topic']
+   handler_db[t if t in handler_db else '*'].dump(device, notification)
+
+#-------------------------------------------------------------------------------
+#
+#  Communication                                                            {{{1
+#
+#-------------------------------------------------------------------------------
+
 def calculate_digest_response(username, realm, password, uri, method, nonce, nc, cnonce):
     ha1 = hashlib.md5(f"{username}:{realm}:{password}".encode()).hexdigest()
     ha2 = hashlib.md5(f"{method}:{uri}".encode()).hexdigest()
@@ -67,13 +147,9 @@ async def metadata_websocket_connection(device, topics, username, password, nonc
          while True:
             message = await websocket.recv()
             m = json.loads(message)
+            # This is draft code that only deals with some events
             if m['method'] == 'events:notify':
-               n = m['params']['notification']
-               # This is draft code that only deals with some events
-               ts = datetime.fromtimestamp(n['timestamp'] / 1000).strftime("%Y-%m-%d %H:%M:%S")
-               source = ' '.join([f'{a}={b}' for a,b in n['message']['source'].items()])
-               data = ' '.join([f'{a}={b}' for a,b in n['message']['data'].items()])
-               print(f'{ts} {device}: {n["topic"]} {source} {data}')
+               handle_notification(device, m['params']['notification'])
             else:
                print(device, m)
 
@@ -115,8 +191,18 @@ async def main(args):
    """
    tasks = []
    for c in args.camera:
-      tasks.append(asyncio.create_task(event_listener_task(c, args.topic, args.user, args.password)))
+      tasks.append(
+         asyncio.create_task(
+             event_listener_task(c, args.topic, args.user, args.password)
+         )
+      )
    await asyncio.gather(*tasks)
+
+#-------------------------------------------------------------------------------
+#
+#  Main program                                                             {{{1
+#
+#-------------------------------------------------------------------------------
 
 if __name__ == "__main__":
 
@@ -143,6 +229,5 @@ if __name__ == "__main__":
        exit(1)
 
     asyncio.run(main(args))
-
 
 #  vim: set nowrap sw=3 sts=3 et fdm=marker:
