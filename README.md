@@ -5,7 +5,9 @@ This script performs an authenticated connect over websocket to Axis devices and
 
 Example invocation, tracks two events on two devices:
 
+```
 python3 get_events.py -c 169.254.205.195 -c 169.254.200.32 -u root -p pass -t axis:Device/tnsaxis:IO/Port -t axis:CameraApplicationPlatform/VMD/Camera1ProfileANY
+```
 
 Tested with Python 3.10, 3.11 and 3.12
 
