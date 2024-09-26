@@ -11,4 +11,4 @@ python3 get_events.py -c 169.254.205.195 -c 169.254.200.32 -u root -p pass -t ax
 
 Tested with Python 3.10, 3.11 and 3.12
 
-Credits to @vivekatoffice for providing the websocket auth part, although I changed some bits
+Credits to @vivekatoffice for getting me started with the websocket auth part
