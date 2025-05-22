@@ -1,0 +1,6 @@
+[FORMAT]
+good-names=a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,v,w,Log,fp,db
+indent-after-paren=3
+indent-string='   '
+max-line-length=130
+disable=no-else-return
